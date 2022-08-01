@@ -74,7 +74,7 @@ contract Raffle is VRFConsumerBaseV2, KeeperCompatibleInterface {
     //this is the function that the chainlink nodes call,
     //they look for the upkeepNeeded bool to return true
     function checkUpkeep(
-        bytes memory /* checkData*/
+        bytes memory /* checkData */
     )
         public
         view
@@ -85,11 +85,11 @@ contract Raffle is VRFConsumerBaseV2, KeeperCompatibleInterface {
         )
     {
         bool isOpen = RaffleState.OPEN == s_raffleState;
-        bool timePassed = (((block.timestamp) - s_lastTimeStamp) > i_interval);
+        bool timePassed = ((block.timestamp - s_lastTimeStamp) > i_interval);
         bool hasPlayers = s_players.length > 0;
         bool hasBalance = address(this).balance > 0;
-        upkeepNeeded = (isOpen && timePassed && hasPlayers && hasBalance);
-        return (upkeepNeeded, "0x0");
+        upkeepNeeded = (timePassed && isOpen && hasBalance && hasPlayers);
+        //return (upkeepNeeded, "0x0"); // can we comment this out?
     }
 
     function performUpkeep(bytes calldata) external override {

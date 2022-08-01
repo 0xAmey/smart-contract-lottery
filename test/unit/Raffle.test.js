@@ -4,7 +4,7 @@ const { developmentChains, networkConfig } = require("../../helper.hardhat.confi
 
 !developmentChains.includes(network.name) //if the network name is not included then skip or else *run the test*
     ? describe.skip
-    : describe("Raffle", async () => {
+    : describe("Raffle unit test", async () => {
           let raffle, vrfCoordinatorV2Mock, raffleEntranceFee, deployer, interval
           const chainId = network.config.chainId
 
@@ -111,7 +111,7 @@ const { developmentChains, networkConfig } = require("../../helper.hardhat.confi
                           vrfCoordinatorV2Mock.fulfillRandomWords(0, raffle.address)
                       ).to.be.revertedWith("nonexistent request")
                   })
-                  it("picks a winner, resets the lottery and send money", async () => {
+                  it("picks a winner, resets the lottery and sends money", async () => {
                       const additionalEntrants = 3
                       const startingAccountIndex = 1 //deployer is at 0
                       const accounts = await ethers.getSigners() // array of accounts
@@ -131,7 +131,51 @@ const { developmentChains, networkConfig } = require("../../helper.hardhat.confi
                       //wait for fulfillRandomWords to be called
 
                       await new Promise(async (resolve, reject) => {
-                          raffle.once("Winner Picked", () => {})
+                          raffle.once("WinnerPicked", async () => {
+                              // event listener for WinnerPicked
+                              console.log("WinnerPicked event fired!")
+                              // assert throws an error if it fails, so we need to wrap
+                              // it in a try/catch so that the promise returns event
+                              // if it fails.
+                              try {
+                                  console.log(accounts[0].address)
+                                  console.log(accounts[1].address)
+                                  console.log(accounts[2].address)
+                                  console.log(accounts[3].address)
+                                  // Now lets get the ending values...
+                                  const recentWinner = await raffle.getRecentWinner()
+                                  console.log(recentWinner)
+                                  const raffleState = await raffle.getRaffleState()
+                                  const winnerBalance = await accounts[1].getBalance()
+                                  const endingTimeStamp = await raffle.getLastTimeStamp()
+                                  await expect(raffle.getPlayer(0)).to.be.reverted
+                                  // Comparisons to check if our ending values are correct:
+                                  assert.equal(recentWinner.toString(), accounts[1].address)
+                                  assert.equal(raffleState, 0)
+                                  assert.equal(
+                                      winnerBalance.toString(),
+                                      startingBalance // startingBalance + ( (raffleEntranceFee * additionalEntrances) + raffleEntranceFee )
+                                          .add(
+                                              raffleEntranceFee
+                                                  .mul(additionalEntrants)
+                                                  .add(raffleEntranceFee)
+                                          )
+                                          .toString()
+                                  )
+                                  assert(endingTimeStamp > startingTimeStamp)
+                                  resolve() // if try passes, resolves the promise
+                              } catch (e) {
+                                  reject(e) // if try fails, rejects the promise
+                              }
+                          })
+
+                          const tx = await raffle.performUpkeep("0x")
+                          const txReceipt = await tx.wait(1)
+                          const startingBalance = await accounts[2].getBalance()
+                          await vrfCoordinatorV2Mock.fulfillRandomWords(
+                              txReceipt.events[1].args.requestId,
+                              raffle.address
+                          )
                       })
                   })
               })
@@ -145,3 +189,33 @@ const { developmentChains, networkConfig } = require("../../helper.hardhat.confi
 //     const { upkeepNeeded } = await raffle.callStatic.checkUpkeep("0x") // upkeepNeeded = (timePassed && isOpen && hasBalance && hasPlayers)
 //     assert(!upkeepNeeded)
 //    })
+
+// await new Promise(async (resolve, reject) => {
+//     raffle.once("Winner Picked", async () => {
+//         console.log("Found the event!")
+//         try {
+//             console.log(accounts[0].address)
+//             console.log(accounts[1].address)
+//             console.log(accounts[2].address)
+//             console.log(accounts[3].address)
+//             const recentWinner = await raffle.getRecentWinner()
+//             console.log(recentWinner)
+
+//             const raffleState = await raffle.getRaffleState()
+//             const endingTimestamp = await raffle.getLastTimeStamp()
+//             const numPlayers = await raffle.getNumberOfPlayers()
+//             assert.equal(numPlayers.toString(), "0")
+//             assert.equal(raffleState.toString(), "0")
+//             assert(endingTimestamp > startingTimeStamp)
+//             resolve()
+//         } catch (e) {
+//             reject(e)
+//         }
+//     })
+//     //setting up the listener
+//     //the code below will fire the event, listener will pick it up and resolve
+//     const tx = await raffle.performUpkeep([])
+//     const txReceipt = await tx.wait(1)
+//     await vrfCoordinatorV2Mock.fulfillRandomWords(
+//         txReceipt.events[1].args.requestId,
+//         raffle.address
